@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Realtime</title>
+<style>
+  #juego {
+    border: 2px solid black;
+    width: 500px;
+    height: 500px;
+    position: relative;
+  }
+
+  .jugador {
+    width: 20px;
+    height: 20px;
+    background-color: red;
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+  }
+
+  .fruta {
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+
+<h1>Realtime:</h1>
+<div id="juego">
+  <div class="jugador" id="plantilla"></div>
+</div>
+
+<div id="bloqueConectar">
+  <input id="textoServer" value="realtime-qul1.onrender.com">
+  <button id="botonConectar">Conectar</button>
+</div>
+
+<script>
+const jugadorBlueprint = document.getElementById("plantilla");
+jugadorBlueprint.remove();
+
+let miconexion;
+let miID = -1;
+
+document.getElementById("botonConectar").addEventListener("click", () => {
+  const direccion = document.getElementById("textoServer").value;
+  miconexion = new WebSocket("wss://" + direccion);
+
+  miconexion.addEventListener("message", (m) => {
+    const mensaje = JSON.parse(m.data.toString());
+
+    if (mensaje.tipo === "new") {
+      if (miID === -1) miID = mensaje.datos.id;
+
+      const nuevoJugador = jugadorBlueprint.cloneNode();
+      nuevoJugador.id = mensaje.datos.id;
+      nuevoJugador.dataset.dir = mensaje.datos.dir;
+      nuevoJugador.dataset.posx = mensaje.datos.posx;
+      nuevoJugador.dataset.posy = mensaje.datos.posy;
+      nuevoJugador.style.top = mensaje.datos.posy + "px";
+      nuevoJugador.style.left = mensaje.datos.posx + "px";
+      nuevoJugador.textContent = mensaje.datos.score;
+
+      nuevoJugador.style.backgroundColor = mensaje.datos.id === miID ? "blue" : "red";
+      document.getElementById("juego").appendChild(nuevoJugador);
+
+    } else if (mensaje.tipo === "delete") {
+      document.getElementById(mensaje.datos).remove();
+
+    } else if (mensaje.tipo === "mover") {
+      const jugadorAMover = document.getElementById(mensaje.datos.id);
+      jugadorAMover.dataset.dir = mensaje.datos.dir;
+      jugadorAMover.dataset.posx = mensaje.datos.posx;
+      jugadorAMover.dataset.posy = mensaje.datos.posy;
+      jugadorAMover.style.top = mensaje.datos.posy + "px";
+      jugadorAMover.style.left = mensaje.datos.posx + "px";
+
+    } else if (mensaje.tipo === "fruta") {
+      const fruta = document.createElement("div");
+      fruta.classList.add("fruta");
+      fruta.id = "fruta_" + mensaje.datos.id;
+      fruta.style.backgroundColor = mensaje.datos.color;
+      fruta.style.left = mensaje.datos.posx + "px";
+      fruta.style.top = mensaje.datos.posy + "px";
+      document.getElementById("juego").appendChild(fruta);
+
+    } else if (mensaje.tipo === "borrarFruta") {
+      const fruta = document.getElementById("fruta_" + mensaje.datos);
+      if (fruta) fruta.remove();
+
+    } else if (mensaje.tipo === "score") {
+      const jugador = document.getElementById(mensaje.datos.id);
+      if (jugador) jugador.textContent = mensaje.datos.score;
+    }
+  });
+});
+
+document.addEventListener("keydown", (ev) => {
+  const yo = document.getElementById(miID);
+  if (!yo) return;
+
+  let posx = Number(yo.dataset.posx);
+  let posy = Number(yo.dataset.posy);
+
+  if (ev.key === "a") posx -= 20;
+  if (ev.key === "d") posx += 20;
+  if (ev.key === "w") posy -= 20;
+  if (ev.key === "s") posy += 20;
+
+  posx = Math.max(0, Math.min(480, posx));
+  posy = Math.max(0, Math.min(480, posy));
+
+  yo.dataset.posx = posx;
+  yo.dataset.posy = posy;
+
+  miconexion.send(JSON.stringify({
+    tipo: "mover",
+    datos: {
+      id: miID,
+      posx,
+      posy,
+      dir: ev.key
+    }
+  }));
+});
+</script>
+</body>
+</html>
